@@ -45,5 +45,25 @@ class RoleSeeder extends Seeder
 
             $role->permissions()->sync($permissionIds);
         }
+
+        // Create organization-specific roles
+        $orgRoles = [
+            'owner' => 'Organization owner with full control',
+            'admin' => 'Organization administrator',
+        ];
+
+        foreach ($orgRoles as $roleSlug => $description) {
+            Role::query()->updateOrCreate(
+                [
+                    'slug' => $roleSlug,
+                    'tenant_id' => null,
+                ],
+                [
+                    'name' => str($roleSlug)->headline()->toString(),
+                    'description' => $description,
+                    'is_system' => true,
+                ],
+            );
+        }
     }
 }

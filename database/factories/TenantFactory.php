@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\OrganizationType;
 use App\Enums\TenantStatus;
 use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -21,6 +22,8 @@ class TenantFactory extends Factory
         return [
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numerify('###'),
+            'legal_name' => $name.' Ltd.',
+            'type' => OrganizationType::School,
             'status' => TenantStatus::Active,
             'settings' => [],
         ];

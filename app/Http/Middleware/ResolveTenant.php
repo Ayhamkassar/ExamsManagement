@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\MembershipStatus;
 use App\Models\Tenant;
 use App\Services\Tenant\TenantContext;
 use App\Support\Api\ApiResponse;
@@ -26,7 +27,7 @@ class ResolveTenant
 
         $tenant = Tenant::query()
             ->where('id', $tenantId)
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'pending'])
             ->first();
 
         if ($tenant === null) {
@@ -34,6 +35,22 @@ class ResolveTenant
                 'Invalid or inactive tenant.',
                 Response::HTTP_NOT_FOUND,
             );
+        }
+
+        // If user is authenticated, verify they belong to this organization
+        $user = $request->user();
+        if ($user !== null && ! $user->is_super_admin) {
+            $belongs = $user->memberships()
+                ->where('organization_id', $tenant->id)
+                ->where('status', MembershipStatus::Active)
+                ->exists();
+
+            if (! $belongs) {
+                return ApiResponse::error(
+                    'You do not have access to this organization.',
+                    Response::HTTP_FORBIDDEN,
+                );
+            }
         }
 
         $this->tenantContext->set($tenant);

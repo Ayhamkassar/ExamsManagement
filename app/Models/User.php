@@ -30,8 +30,6 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $email_verified_at
  * @property Carbon|null $last_login_at
  * @property string|null $last_login_ip
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
  * @property \Illuminate\Database\Eloquent\Collection<int, Role> $roles
  * @property Tenant|null $tenant
  */
@@ -82,6 +80,11 @@ class User extends Authenticatable implements MustVerifyEmailContract
         return $this->belongsToMany(Role::class, 'role_user')
             ->withPivot('tenant_id')
             ->withTimestamps();
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(Membership::class);
     }
 
     /**

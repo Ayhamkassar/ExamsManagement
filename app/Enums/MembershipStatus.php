@@ -2,10 +2,10 @@
 
 namespace App\Enums;
 
-enum TenantStatus: string
+enum MembershipStatus: string
 {
+    case Invited = 'invited';
     case Active = 'active';
     case Suspended = 'suspended';
-    case Pending = 'pending';
-    case Archived = 'archived';
+    case Removed = 'removed';
 }

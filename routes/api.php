@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\Auth\ProfileController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\MembershipController;
+use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\Rbac\PermissionController;
 use App\Http\Controllers\Api\V1\Rbac\RoleController;
 use App\Http\Controllers\Api\V1\Rbac\UserRoleController;
@@ -55,6 +57,36 @@ Route::prefix('v1')->group(function (): void {
     });
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        // Organizations
+        Route::get('/organizations', [OrganizationController::class, 'index'])
+            ->name('api.v1.organizations.index');
+
+        Route::post('/organizations', [OrganizationController::class, 'store'])
+            ->name('api.v1.organizations.store');
+
+        Route::get('/organizations/{organization}', [OrganizationController::class, 'show'])
+            ->name('api.v1.organizations.show');
+
+        Route::patch('/organizations/{organization}', [OrganizationController::class, 'update'])
+            ->name('api.v1.organizations.update');
+
+        Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])
+            ->name('api.v1.organizations.destroy');
+
+        // Memberships
+        Route::get('/organizations/{organization}/members', [MembershipController::class, 'index'])
+            ->name('api.v1.organizations.members.index');
+
+        Route::post('/organizations/{organization}/members/invite', [MembershipController::class, 'invite'])
+            ->name('api.v1.organizations.members.invite');
+
+        Route::patch('/organizations/{organization}/members/{membership}', [MembershipController::class, 'update'])
+            ->name('api.v1.organizations.members.update');
+
+        Route::delete('/organizations/{organization}/members/{membership}', [MembershipController::class, 'destroy'])
+            ->name('api.v1.organizations.members.destroy');
+
+        // RBAC
         Route::get('/permissions', [PermissionController::class, 'index'])
             ->middleware('permission:roles.manage')
             ->name('api.v1.permissions.index');
