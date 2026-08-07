@@ -2,11 +2,17 @@
 
 namespace App\Providers;
 
+use App\Models\AcademicUnit;
+use App\Models\AcademicYear;
 use App\Models\Membership;
 use App\Models\PersonalAccessToken;
 use App\Models\Role;
+use App\Models\Subject;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Policies\Academic\AcademicUnitPolicy;
+use App\Policies\Academic\AcademicYearPolicy;
+use App\Policies\Academic\SubjectPolicy;
 use App\Policies\MembershipPolicy;
 use App\Policies\RolePolicy;
 use App\Policies\TenantPolicy;
@@ -35,6 +41,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(Role::class, RolePolicy::class);
         Gate::policy(Membership::class, MembershipPolicy::class);
+        Gate::policy(AcademicYear::class, AcademicYearPolicy::class);
+        Gate::policy(AcademicUnit::class, AcademicUnitPolicy::class);
+        Gate::policy(Subject::class, SubjectPolicy::class);
 
         Gate::define('permission', function ($user, string $permission, ?string $tenantId = null): bool {
             return app(AuthorizationService::class)->userHasPermission($user, $permission, $tenantId);

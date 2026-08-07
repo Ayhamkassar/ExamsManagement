@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Academic\AcademicUnitController;
+use App\Http\Controllers\Api\V1\Academic\AcademicUnitSubjectController;
+use App\Http\Controllers\Api\V1\Academic\AcademicYearController;
+use App\Http\Controllers\Api\V1\Academic\SubjectController;
 use App\Http\Controllers\Api\V1\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
@@ -36,7 +40,6 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:password')
             ->name('api.v1.auth.reset-password');
 
-        // Email verification is triggered from a signed URL, so it stays public.
         Route::post('/email/verify', [EmailVerificationController::class, 'verify'])
             ->name('api.v1.auth.email.verify');
 
@@ -57,7 +60,6 @@ Route::prefix('v1')->group(function (): void {
     });
 
     Route::middleware('auth:sanctum')->group(function (): void {
-        // Organizations
         Route::get('/organizations', [OrganizationController::class, 'index'])
             ->name('api.v1.organizations.index');
 
@@ -73,7 +75,6 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy'])
             ->name('api.v1.organizations.destroy');
 
-        // Memberships
         Route::get('/organizations/{organization}/members', [MembershipController::class, 'index'])
             ->name('api.v1.organizations.members.index');
 
@@ -86,7 +87,78 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/organizations/{organization}/members/{membership}', [MembershipController::class, 'destroy'])
             ->name('api.v1.organizations.members.destroy');
 
-        // RBAC
+        Route::get('/organizations/{organization}/academic-years', [AcademicYearController::class, 'index'])
+            ->middleware('permission:academic_year.view')
+            ->name('api.v1.academic-years.index');
+
+        Route::post('/organizations/{organization}/academic-years', [AcademicYearController::class, 'store'])
+            ->middleware('permission:academic_year.create')
+            ->name('api.v1.academic-years.store');
+
+        Route::get('/organizations/{organization}/academic-years/{academicYear}', [AcademicYearController::class, 'show'])
+            ->middleware('permission:academic_year.view')
+            ->name('api.v1.academic-years.show');
+
+        Route::patch('/organizations/{organization}/academic-years/{academicYear}', [AcademicYearController::class, 'update'])
+            ->middleware('permission:academic_year.update')
+            ->name('api.v1.academic-years.update');
+
+        Route::delete('/organizations/{organization}/academic-years/{academicYear}', [AcademicYearController::class, 'destroy'])
+            ->middleware('permission:academic_year.delete')
+            ->name('api.v1.academic-years.destroy');
+
+        Route::get('/organizations/{organization}/academic-units', [AcademicUnitController::class, 'index'])
+            ->middleware('permission:academic_unit.view')
+            ->name('api.v1.academic-units.index');
+
+        Route::post('/organizations/{organization}/academic-units', [AcademicUnitController::class, 'store'])
+            ->middleware('permission:academic_unit.create')
+            ->name('api.v1.academic-units.store');
+
+        Route::get('/organizations/{organization}/academic-units/{academicUnit}', [AcademicUnitController::class, 'show'])
+            ->middleware('permission:academic_unit.view')
+            ->name('api.v1.academic-units.show');
+
+        Route::patch('/organizations/{organization}/academic-units/{academicUnit}', [AcademicUnitController::class, 'update'])
+            ->middleware('permission:academic_unit.update')
+            ->name('api.v1.academic-units.update');
+
+        Route::delete('/organizations/{organization}/academic-units/{academicUnit}', [AcademicUnitController::class, 'destroy'])
+            ->middleware('permission:academic_unit.delete')
+            ->name('api.v1.academic-units.destroy');
+
+        Route::get('/organizations/{organization}/subjects', [SubjectController::class, 'index'])
+            ->middleware('permission:subject.view')
+            ->name('api.v1.subjects.index');
+
+        Route::post('/organizations/{organization}/subjects', [SubjectController::class, 'store'])
+            ->middleware('permission:subject.create')
+            ->name('api.v1.subjects.store');
+
+        Route::get('/organizations/{organization}/subjects/{subject}', [SubjectController::class, 'show'])
+            ->middleware('permission:subject.view')
+            ->name('api.v1.subjects.show');
+
+        Route::patch('/organizations/{organization}/subjects/{subject}', [SubjectController::class, 'update'])
+            ->middleware('permission:subject.update')
+            ->name('api.v1.subjects.update');
+
+        Route::delete('/organizations/{organization}/subjects/{subject}', [SubjectController::class, 'destroy'])
+            ->middleware('permission:subject.delete')
+            ->name('api.v1.subjects.destroy');
+
+        Route::get('/organizations/{organization}/academic-units/{academicUnit}/subjects', [AcademicUnitSubjectController::class, 'index'])
+            ->middleware('permission:subject.view')
+            ->name('api.v1.academic-units.subjects.index');
+
+        Route::post('/organizations/{organization}/academic-units/{academicUnit}/subjects', [AcademicUnitSubjectController::class, 'store'])
+            ->middleware('permission:subject.create')
+            ->name('api.v1.academic-units.subjects.store');
+
+        Route::delete('/organizations/{organization}/academic-units/{academicUnit}/subjects/{subject}', [AcademicUnitSubjectController::class, 'destroy'])
+            ->middleware('permission:subject.delete')
+            ->name('api.v1.academic-units.subjects.destroy');
+
         Route::get('/permissions', [PermissionController::class, 'index'])
             ->middleware('permission:roles.manage')
             ->name('api.v1.permissions.index');

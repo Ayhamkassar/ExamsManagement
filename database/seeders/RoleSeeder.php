@@ -19,6 +19,18 @@ class RoleSeeder extends Seeder
                 SystemPermission::ManageUsers,
                 SystemPermission::ManageRoles,
                 SystemPermission::ViewAuditLogs,
+                SystemPermission::AcademicYearCreate,
+                SystemPermission::AcademicYearView,
+                SystemPermission::AcademicYearUpdate,
+                SystemPermission::AcademicYearDelete,
+                SystemPermission::AcademicUnitCreate,
+                SystemPermission::AcademicUnitView,
+                SystemPermission::AcademicUnitUpdate,
+                SystemPermission::AcademicUnitDelete,
+                SystemPermission::SubjectCreate,
+                SystemPermission::SubjectView,
+                SystemPermission::SubjectUpdate,
+                SystemPermission::SubjectDelete,
             ],
             SystemRole::Examiner->value => [],
             SystemRole::Reviewer->value => [],
@@ -46,24 +58,52 @@ class RoleSeeder extends Seeder
             $role->permissions()->sync($permissionIds);
         }
 
-        // Create organization-specific roles
-        $orgRoles = [
-            'owner' => 'Organization owner with full control',
-            'admin' => 'Organization administrator',
+        // Create organization-specific roles with full permissions
+        $allPermissions = SystemPermission::cases();
+        $academicPermissions = [
+            SystemPermission::AcademicYearCreate,
+            SystemPermission::AcademicYearView,
+            SystemPermission::AcademicYearUpdate,
+            SystemPermission::AcademicYearDelete,
+            SystemPermission::AcademicUnitCreate,
+            SystemPermission::AcademicUnitView,
+            SystemPermission::AcademicUnitUpdate,
+            SystemPermission::AcademicUnitDelete,
+            SystemPermission::SubjectCreate,
+            SystemPermission::SubjectView,
+            SystemPermission::SubjectUpdate,
+            SystemPermission::SubjectDelete,
         ];
 
-        foreach ($orgRoles as $roleSlug => $description) {
-            Role::query()->updateOrCreate(
+        $orgRolePermissions = [
+            'owner' => $allPermissions,
+            'admin' => array_merge([
+                SystemPermission::ManageOrganization,
+                SystemPermission::ManageUsers,
+                SystemPermission::ManageRoles,
+                SystemPermission::ViewAuditLogs,
+            ], $academicPermissions),
+        ];
+
+        foreach ($orgRolePermissions as $roleSlug => $permissions) {
+            $role = Role::query()->updateOrCreate(
                 [
                     'slug' => $roleSlug,
                     'tenant_id' => null,
                 ],
                 [
                     'name' => str($roleSlug)->headline()->toString(),
-                    'description' => $description,
+                    'description' => 'Organization role: '.$roleSlug,
                     'is_system' => true,
                 ],
             );
+
+            $permissionIds = collect($permissions)
+                ->map(fn (SystemPermission $permission) => Permission::query()->where('slug', $permission->value)->value('id'))
+                ->filter()
+                ->all();
+
+            $role->permissions()->sync($permissionIds);
         }
     }
 }
