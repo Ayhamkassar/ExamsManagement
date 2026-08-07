@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Enums\MembershipStatus;
+use App\Models\Membership;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -23,10 +24,9 @@ final class AuthorizationService
                 ->with('role.permissions')
                 ->first();
 
-            /** @var \App\Models\Membership|null $membershipRole */
-
+            /** @var Membership|null $membershipRole */
             if ($membershipRole !== null && $membershipRole->role !== null) {
-                /** @var \App\Models\Role $membershipRoleRole */
+                /** @var Role $membershipRoleRole */
                 $membershipRoleRole = $membershipRole->role;
 
                 return $membershipRoleRole->permissions

@@ -11,20 +11,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * @property string $id
  * @property string $name
  * @property string $slug
  * @property string|null $legal_name
- * @property \App\Enums\OrganizationType|null $type
- * @property \App\Enums\TenantStatus $status
+ * @property OrganizationType|null $type
+ * @property TenantStatus $status
  * @property string|null $logo_path
  * @property array<string, mixed>|null $settings
  * @property string|null $created_by
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  */
 class Tenant extends Model
 {
