@@ -1,10 +1,94 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Auth\EmailVerificationController;
+use App\Http\Controllers\Api\V1\Auth\LoginController;
+use App\Http\Controllers\Api\V1\Auth\LogoutController;
+use App\Http\Controllers\Api\V1\Auth\PasswordController;
+use App\Http\Controllers\Api\V1\Auth\ProfileController;
+use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\Rbac\PermissionController;
+use App\Http\Controllers\Api\V1\Rbac\RoleController;
+use App\Http\Controllers\Api\V1\Rbac\UserRoleController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
     Route::get('/health/live', [HealthController::class, 'live'])->name('api.v1.health.live');
     Route::get('/health/ready', [HealthController::class, 'ready'])->name('api.v1.health.ready');
     Route::get('/health', [HealthController::class, 'ready'])->name('api.v1.health');
+
+    Route::prefix('auth')->group(function (): void {
+        Route::post('/register', [RegisterController::class, 'store'])
+            ->middleware('throttle:register')
+            ->name('api.v1.auth.register');
+
+        Route::post('/login', [LoginController::class, 'login'])
+            ->middleware('throttle:login')
+            ->name('api.v1.auth.login');
+
+        Route::post('/forgot-password', [PasswordController::class, 'forgot'])
+            ->middleware('throttle:password')
+            ->name('api.v1.auth.forgot-password');
+
+        Route::post('/reset-password', [PasswordController::class, 'reset'])
+            ->middleware('throttle:password')
+            ->name('api.v1.auth.reset-password');
+
+        // Email verification is triggered from a signed URL, so it stays public.
+        Route::post('/email/verify', [EmailVerificationController::class, 'verify'])
+            ->name('api.v1.auth.email.verify');
+
+        Route::middleware('auth:sanctum')->group(function (): void {
+            Route::post('/logout', [LogoutController::class, 'logout'])->name('api.v1.auth.logout');
+            Route::post('/logout-all', [LogoutController::class, 'logoutAll'])->name('api.v1.auth.logout-all');
+            Route::get('/me', [ProfileController::class, 'me'])->name('api.v1.auth.me');
+            Route::patch('/profile', [ProfileController::class, 'update'])->name('api.v1.auth.profile.update');
+            Route::post('/change-password', [PasswordController::class, 'change'])->name('api.v1.auth.password.change');
+
+            Route::get('/sessions', [LogoutController::class, 'sessions'])->name('api.v1.auth.sessions');
+            Route::delete('/sessions/{session}', [LogoutController::class, 'revokeSession'])->name('api.v1.auth.sessions.revoke');
+
+            Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
+                ->middleware('throttle:verification')
+                ->name('api.v1.auth.email.resend');
+        });
+    });
+
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/permissions', [PermissionController::class, 'index'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.permissions.index');
+
+        Route::get('/roles', [RoleController::class, 'index'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.roles.index');
+
+        Route::post('/roles', [RoleController::class, 'store'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.roles.store');
+
+        Route::get('/roles/{role}', [RoleController::class, 'show'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.roles.show');
+
+        Route::patch('/roles/{role}', [RoleController::class, 'update'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.roles.update');
+
+        Route::delete('/roles/{role}', [RoleController::class, 'destroy'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.roles.destroy');
+
+        Route::post('/roles/{role}/permissions', [RoleController::class, 'syncPermissions'])
+            ->middleware('permission:roles.manage')
+            ->name('api.v1.roles.permissions.sync');
+
+        Route::post('/users/{user}/roles', [UserRoleController::class, 'store'])
+            ->middleware('permission:users.manage')
+            ->name('api.v1.users.roles.store');
+
+        Route::delete('/users/{user}/roles/{role}', [UserRoleController::class, 'destroy'])
+            ->middleware('permission:users.manage')
+            ->name('api.v1.users.roles.destroy');
+    });
 });

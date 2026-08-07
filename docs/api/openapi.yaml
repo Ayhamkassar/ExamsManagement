@@ -4,14 +4,19 @@ info:
   version: v1
   description: |
     ExamFlow API — versioned REST backend for the ExamFlow examination platform.
-    Base URL: /api/v1. Only Phase 0 (foundation) endpoints exist. See docs/api/README.md
-    for conventions (envelope, errors, correlation, pagination, filtering, rate limits).
+    Base URL: /api/v1. Phase 0 foundation + Phase 1 identity & authentication.
+    See docs/api/README.md for conventions (envelope, errors, correlation, pagination,
+    filtering, rate limits) and docs/api/authentication.md for the auth contract.
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
 tags:
   - name: health
     description: Liveness and readiness probes
+  - name: auth
+    description: Identity & authentication
+  - name: rbac
+    description: Roles, permissions and user-role assignment
 
 components:
   securitySchemes:
@@ -90,6 +95,93 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: [string, 'null'] }
+        status: { type: string, enum: [active, inactive, suspended, pending_verification] }
+        is_super_admin: { type: boolean }
+        email_verified_at: { type: [string, 'null'], format: date-time }
+        last_login_at: { type: [string, 'null'], format: date-time }
+        last_login_ip: { type: [string, 'null'] }
+        created_at: { type: [string, 'null'], format: date-time }
+        updated_at: { type: [string, 'null'], format: date-time }
+    AuthContext:
+      type: object
+      properties:
+        roles:
+          type: array
+          items: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        tenant:
+          type: [object, 'null']
+          properties:
+            id: { type: string }
+            name: { type: string }
+    LoginData:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        token: { type: string }
+        roles:
+          type: array
+          items: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        tenant:
+          type: [object, 'null']
+    Session:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: [string, 'null'] }
+        last_used_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: [string, 'null'], format: date-time }
+    Permission:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        guard_name: { type: string }
+        created_at: { type: [string, 'null'], format: date-time }
+        updated_at: { type: [string, 'null'], format: date-time }
+    Role:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        guard_name: { type: string }
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        created_at: { type: [string, 'null'], format: date-time }
+        updated_at: { type: [string, 'null'], format: date-time }
+
+  responses:
+    ValidationError:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiError'
+              - type: object
+                properties:
+                  errors:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: { type: string }
+
+paths:
 
 paths:
   /health/live:
@@ -190,3 +282,562 @@ paths:
           description: Alias of /health/ready.
         '503':
           description: Application is degraded.
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new user
+      operationId: auth-register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: [string, 'null'] }
+                password: { type: string, minLength: 12 }
+                password_confirmation: { type: string }
+      responses:
+        '201':
+          description: Created. User returned; verification email sent.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Too many registration attempts.
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Log in and obtain a Sanctum token
+      operationId: auth-login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                device: { type: [string, 'null'], description: Optional device label }
+      responses:
+        '200':
+          description: Login successful.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoginData'
+        '401':
+          description: Invalid credentials.
+        '403':
+          description: Account is not active (suspended/inactive).
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Too many login attempts.
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current token
+      operationId: auth-logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out.
+        '401':
+          description: Unauthenticated.
+
+  /auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Revoke all tokens for the user
+      operationId: auth-logout-all
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out from all devices.
+        '401':
+          description: Unauthenticated.
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Get the authenticated user and context
+      operationId: auth-me
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profile and auth context.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user: { $ref: '#/components/schemas/User' }
+                          roles: { type: array, items: { type: string } }
+                          permissions: { type: array, items: { type: string } }
+                          tenant: { type: [object, 'null'] }
+        '401':
+          description: Unauthenticated.
+
+  /auth/profile:
+    patch:
+      tags: [auth]
+      summary: Update the authenticated user's profile
+      operationId: auth-profile-update
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: [string, 'null'], maxLength: 255 }
+                phone: { type: [string, 'null'], maxLength: 32 }
+      responses:
+        '200':
+          description: Profile updated.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Unauthenticated.
+
+  /auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Request a password reset link (generic response)
+      operationId: auth-forgot-password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: Generic success (no enumeration).
+        '429':
+          description: Too many requests.
+
+  /auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Reset the password with a token
+      operationId: auth-reset-password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, password, password_confirmation]
+              properties:
+                email: { type: string, format: email }
+                token: { type: string }
+                password: { type: string, minLength: 12 }
+                password_confirmation: { type: string }
+      responses:
+        '200':
+          description: Password reset.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Too many requests.
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change the authenticated user's password
+      operationId: auth-change-password
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, password, password_confirmation]
+              properties:
+                current_password: { type: string }
+                password: { type: string, minLength: 12 }
+                password_confirmation: { type: string }
+      responses:
+        '200':
+          description: Password changed.
+        '401':
+          description: Unauthenticated or current password invalid.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/email/verify:
+    post:
+      tags: [auth]
+      summary: Verify email address with signed URL params
+      operationId: auth-email-verify
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, hash]
+              properties:
+                id: { type: string }
+                hash: { type: string }
+      responses:
+        '200':
+          description: Email verified.
+        '403':
+          description: Invalid or expired signature / hash mismatch.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/email/resend:
+    post:
+      tags: [auth]
+      summary: Resend email verification notification
+      operationId: auth-email-resend
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Verification email sent.
+        '401':
+          description: Unauthenticated.
+        '429':
+          description: Too many requests.
+
+  /auth/sessions:
+    get:
+      tags: [auth]
+      summary: List active sessions/tokens for the authenticated user
+      operationId: auth-sessions-list
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active sessions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          sessions:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Session'
+        '401':
+          description: Unauthenticated.
+
+  /auth/sessions/{session}:
+    delete:
+      tags: [auth]
+      summary: Revoke a specific session/token
+      operationId: auth-sessions-revoke
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session revoked.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Cannot revoke another user's session.
+        '404':
+          description: Session not found.
+
+
+  /permissions:
+    get:
+      tags: [rbac]
+      summary: List all permissions
+      operationId: rbac-permissions-index
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Permissions list.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Permission'
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission.
+
+  /roles:
+    get:
+      tags: [rbac]
+      summary: List roles
+      operationId: rbac-roles-index
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Roles list.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Role'
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission.
+    post:
+      tags: [rbac]
+      summary: Create a role
+      operationId: rbac-roles-store
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, guard]
+              properties:
+                name: { type: string, maxLength: 255 }
+                guard: { type: string, maxLength: 255, default: 'web' }
+      responses:
+        '201':
+          description: Role created.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{role}:
+    get:
+      tags: [rbac]
+      summary: Get a role
+      operationId: rbac-roles-show
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Role'
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission.
+        '404':
+          description: Role not found.
+    patch:
+      tags: [rbac]
+      summary: Update a role
+      operationId: rbac-roles-update
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: [string, 'null'], maxLength: 255 }
+                guard: { type: [string, 'null'], maxLength: 255 }
+      responses:
+        '200':
+          description: Role updated.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission or system role protected.
+        '404':
+          description: Role not found.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [rbac]
+      summary: Delete a role
+      operationId: rbac-roles-destroy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Role deleted.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission or system role protected.
+        '404':
+          description: Role not found.
+
+  /roles/{role}/permissions:
+    post:
+      tags: [rbac]
+      summary: Sync permissions for a role
+      operationId: rbac-roles-sync-permissions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Permissions synced.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing roles.manage permission or system role protected.
+        '404':
+          description: Role not found.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/{user}/roles:
+    post:
+      tags: [rbac]
+      summary: Assign a role to a user
+      operationId: rbac-users-roles-store
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string }
+      responses:
+        '201':
+          description: Role assigned.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing users.manage permission.
+        '404':
+          description: User or role not found.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [rbac]
+      summary: Remove a role from a user
+      operationId: rbac-users-roles-destroy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role removed.
+        '401':
+          description: Unauthenticated.
+        '403':
+          description: Missing users.manage permission.
+        '404':
+          description: User or role not found.
