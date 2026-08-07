@@ -1,0 +1,192 @@
+openapi: 3.0.3
+info:
+  title: ExamFlow API
+  version: v1
+  description: |
+    ExamFlow API — versioned REST backend for the ExamFlow examination platform.
+    Base URL: /api/v1. Only Phase 0 (foundation) endpoints exist. See docs/api/README.md
+    for conventions (envelope, errors, correlation, pagination, filtering, rate limits).
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+tags:
+  - name: health
+    description: Liveness and readiness probes
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum token
+  parameters:
+    XTenantId:
+      name: X-Tenant-ID
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Active tenant ULID. Validated by server-side middleware.
+    XRequestId:
+      name: X-Request-ID
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Client-supplied correlation id (otherwise generated and echoed).
+  headers:
+    XRequestId:
+      schema:
+        type: string
+      description: Correlation id assigned to this request.
+  schemas:
+    ApiSuccess:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          description: Endpoint-specific payload.
+    ApiError:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Present for validation / conflict errors.
+    HealthCheckResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        message:
+          type: string
+      required: [status]
+    HealthReadyData:
+      type: object
+      required: [status, checks, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ready, degraded]
+        checks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealthCheckResult'
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  /health/live:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      operationId: health-live
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Application is alive.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [status, timestamp]
+                        properties:
+                          status:
+                            type: string
+                            const: alive
+                          timestamp:
+                            type: string
+                            format: date-time
+        '404':
+          description: Invalid or inactive tenant supplied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '429':
+          description: Too many requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /health/ready:
+    get:
+      tags: [health]
+      summary: Readiness probe (DB / Redis / cache checks)
+      operationId: health-ready
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Application is ready.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/HealthReadyData'
+        '429':
+          description: Too many requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Application is degraded (a dependency check failed).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/HealthReadyData'
+
+  /health:
+    get:
+      tags: [health]
+      summary: Readiness probe (alias)
+      operationId: health-readiness-alias
+      parameters:
+        - $ref: '#/components/parameters/XTenantId'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Alias of /health/ready.
+        '503':
+          description: Application is degraded.

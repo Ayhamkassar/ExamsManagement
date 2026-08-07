@@ -1,0 +1,19 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - config
+        - routes
+        - database
+
+    level: 5
+
+    # App\Jobs\Concerns\TenantAware is a Phase 0 foundation trait intended for
+    # consumption by queue jobs in Phase 1+; it is intentionally unreferenced yet.
+    ignoreErrors:
+        - identifier: trait.unused
+
+    excludePaths:
+        - database/migrations

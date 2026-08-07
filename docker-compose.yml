@@ -1,0 +1,136 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: examflow-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-examflow}
+      DB_USERNAME: ${DB_USERNAME:-examflow}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    networks:
+      - examflow
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: examflow-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-examflow}
+      DB_USERNAME: ${DB_USERNAME:-examflow}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    networks:
+      - examflow
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: examflow-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-examflow}
+      DB_USERNAME: ${DB_USERNAME:-examflow}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: php artisan schedule:work
+    networks:
+      - examflow
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: examflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-examflow}
+      POSTGRES_USER: ${DB_USERNAME:-examflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-examflow} -d ${DB_DATABASE:-examflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - examflow
+
+  redis:
+    image: redis:7-alpine
+    container_name: examflow-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - examflow
+
+networks:
+  examflow:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
